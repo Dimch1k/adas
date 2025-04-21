@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Requirements</title>
+    <style>
+        #requirement-form, #edit-modal {
+            display: none;
+            margin-top: 10px;
+        }
+        .modal {
+            position: fixed;
+            top: 30%;
+            left: 50%;
+            transform: translate(-50%, -30%);
+            background: white;
+            padding: 20px;
+            border: 1px solid #ccc;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+<!--nav-->
+<nav style="background: #f4f4f4; padding: 10px; margin-bottom: 20px;">
+    <a href="/customers.html" style="margin-right: 15px;">Customers</a>
+    <a href="/support.html" style="margin-right: 15px;">Support</a>
+    <a href="/requirements.html" style="margin-right: 15px;">Requirements</a>
+    <a href="/developments.html" style="margin-right: 15px;">Developments</a>
+    <a href="/testings.html" style="margin-right: 15px;">Testings</a>
+    <a href="/my-tasks.html" id="my-tasks-link" style="display: none;">My Tasks</a>
+</nav>
+
+<h1>Requirements</h1>
+
+<button id="toggle-form">Add New</button>
+
+<form id="requirement-form">
+    <input type="text" id="title" placeholder="Title" required />
+    <input type="text" id="description" placeholder="Description" />
+    <select id="type" required>
+        <option value="">Select type</option>
+        <option value="Functional">Functional</option>
+        <option value="Non-functional">Non-functional</option>
+    </select>
+    <input type="email" id="email" placeholder="Customer Email" />
+    <button type="submit">Create</button>
+</form>
+
+<ul id="requirement-list"></ul>
+
+<!-- Edit Modal -->
+<div id="edit-modal" class="modal">
+    <h3>Edit Requirement</h3>
+    <p><strong>ID:</strong> <span id="requirement-id"></span></p>
+    <br>
+    Title
+    <input type="text" id="edit-title" placeholder="Title" />
+    <br>
+    Description
+    <input type="text" id="edit-description" placeholder="Description" />
+    <br>
+    Type
+    <select id="edit-type" required>
+        <option value="Functional">Functional</option>
+        <option value="Non-functional">Non-functional</option>
+    </select>
+    <br>
+    <p><strong>Created At:</strong> <span id="requirement-createdAt"></span></p>
+    <br>
+    <div id="requirement-customer-info">
+        <h4>Customer Info:</h4>
+        <p><strong>Name:</strong> <span id="customer-name"></span></p>
+        <p><strong>Surname:</strong> <span id="customer-surname"></span></p>
+        <p><strong>Email:</strong> <span id="customer-email"></span></p>
+    </div>
+
+    <button id="save-edit">Save</button>
+    <button id="close-modal">Close</button>
+</div>
+
+<script>
+    async function hideAddEditButton() {
+        try {
+            const res = await fetch('/api/me');
+            const user = await res.json();
+            const roles = user.roles;
+
+            const restrictedRoles = ["ROLE_QA", "ROLE_DEVELOPER", "ROLE_SUPPORT", "ROLE_PROJECT_MANAGER"];
+
+            const addBtn = document.getElementById("toggle-form");
+            const editBtn = document.getElementById("save-edit");
+
+            if (roles.some(role => restrictedRoles.includes(role))) {
+                addBtn.style.display = "none";
+                editBtn.style.display = "none";
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+    hideAddEditButton();
+
+    async function setupNavbar() {
+        try {
+            const res = await fetch('/api/me');
+            const data = await res.json();
+            const roles = data.roles;
+
+            const myTasks = document.getElementById("my-tasks-link");
+
+            if (roles.includes("ROLE_DEVELOPER") || roles.includes("ROLE_QA")) {
+                myTasks.style.display = "inline-block";
+            }
+        } catch (e) {
+            console.error("Auth check failed", e);
+        }
+    }
+
+    setupNavbar();
+
+    const form = document.getElementById('requirement-form');
+    const toggleFormBtn = document.getElementById('toggle-form');
+    const list = document.getElementById('requirement-list');
+    const modal = document.getElementById('edit-modal');
+    const saveBtn = document.getElementById('save-edit');
+    const closeBtn = document.getElementById('close-modal');
+    const customerInfoBlock = document.getElementById('requirement-customer-info');
+
+    let editingId = null;
+    let userRoles = [];
+
+    async function getUserInfo() {
+        const res = await fetch('/api/me');
+        const data = await res.json();
+        userRoles = data.roles;
+
+        if (userRoles.includes("ROLE_CUSTOMER")) {
+            customerInfoBlock.style.display = "none";
+        }
+    }
+
+    toggleFormBtn.onclick = () => {
+        form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    };
+
+    async function fetchRequirements() {
+        const res = await fetch('/api/requirements');
+        const data = await res.json();
+        list.innerHTML = '';
+        data.forEach(r => {
+            const item = document.createElement('li');
+            item.textContent = `${r.title} - ${r.type}`;
+            const del = document.createElement('button');
+            del.textContent = 'Delete';
+            del.onclick = async () => {
+                await fetch(`/api/requirements/${r.id}`, { method: 'DELETE' });
+                fetchRequirements();
+            };
+
+            const open = document.createElement('button');
+            open.textContent = 'Open';
+            open.onclick = () => openModal(r);
+
+            item.appendChild(open);
+            item.appendChild(del);
+            list.appendChild(item);
+        });
+    }
+
+    form.onsubmit = async (e) => {
+        e.preventDefault();
+        const data = {
+            title: form.title.value,
+            description: form.description.value,
+            type: form.type.value,
+            email: form.email.value
+        };
+        await fetch('/api/requirements', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        form.reset();
+        fetchRequirements();
+    };
+
+    function openModal(r) {
+        editingId = r.id;
+        modal.style.display = 'block';
+
+        document.getElementById('requirement-id').textContent = r.id;
+        document.getElementById('edit-title').value = r.title;
+        document.getElementById('edit-description').value = r.description;
+        document.getElementById('edit-type').value = r.type;
+        document.getElementById('requirement-createdAt').textContent = r.createdAt;
+
+        if (r.customer) {
+            document.getElementById('customer-name').textContent = r.customer.name;
+            document.getElementById('customer-surname').textContent = r.customer.surname;
+            document.getElementById('customer-email').textContent = r.customer.email;
+        }
+    }
+
+    closeBtn.onclick = () => {
+        modal.style.display = 'none';
+        editingId = null;
+    };
+
+    saveBtn.onclick = async () => {
+        const data = {
+            title: document.getElementById('edit-title').value,
+            description: document.getElementById('edit-description').value,
+            type: document.getElementById('edit-type').value
+        };
+        await fetch(`/api/requirements/${editingId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        modal.style.display = 'none';
+        editingId = null;
+        fetchRequirements();
+    };
+
+    getUserInfo();
+    fetchRequirements();
+</script>
+</body>
+</html>

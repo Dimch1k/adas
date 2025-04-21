@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Testings</title>
+    <style>
+        #testing-form, #edit-modal {
+            display: none;
+            margin-top: 10px;
+        }
+        .modal {
+            position: fixed;
+            top: 30%;
+            left: 50%;
+            transform: translate(-50%, -30%);
+            background: white;
+            padding: 20px;
+            border: 1px solid #ccc;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+<!--nav bar-->
+<nav style="background: #f4f4f4; padding: 10px; margin-bottom: 20px;">
+    <a href="/customers.html" style="margin-right: 15px;">Customers</a>
+    <a href="/support.html" style="margin-right: 15px;">Support</a>
+    <a href="/requirements.html" style="margin-right: 15px;">Requirements</a>
+    <a href="/developments.html" style="margin-right: 15px;">Developments</a>
+    <a href="/testings.html" style="margin-right: 15px;">Testings</a>
+    <a href="/my-tasks.html" id="my-tasks-link" style="display: none;">My Tasks</a>
+</nav>
+
+<h1>Testings</h1>
+
+<button id="toggle-form">Add New</button>
+
+<form id="testing-form">
+    <input type="text" id="title" placeholder="Title" required />
+    <input type="text" id="description" placeholder="Description" />
+    <input type="text" id="responsible" placeholder="Responsible" />
+
+    <label>Priority:</label>
+    <select id="priority" required>
+        <option value="">Select</option>
+        <option value="1">1 (Highest)</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+        <option value="5">5 (Lowest)</option>
+    </select>
+
+    <input type="datetime-local" id="deadline" required />
+    <input type="text" id="status" placeholder="Status" />
+    <input type="number" id="developmentId" placeholder="Development ID" required />
+    <button type="submit">Create</button>
+</form>
+
+<ul id="testing-list"></ul>
+
+<!-- Edit -->
+<div id="edit-modal" class="modal">
+    <h3>Edit Testing</h3>
+    <p><strong>ID:</strong> <span id="testing-id"></span></p>
+    <br>
+    Title
+    <input type="text" id="edit-title" placeholder="Title" />
+    <br>
+    Description
+    <input type="text" id="edit-description" placeholder="Description" />
+    <br>
+    Responsible
+    <input type="text" id="edit-responsible" placeholder="Responsible" />
+    <br>
+    <label>Priority:</label>
+    <select id="edit-priority" required>
+        <option value="1">1 (Highest)</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+        <option value="5">5 (Lowest)</option>
+    </select>
+    <br>
+    Deadline
+    <input type="datetime-local" id="edit-deadline" required />
+    <br>
+    Status
+    <input type="text" id="edit-status" placeholder="Status" />
+    <br><br>
+
+    <div id="development-info" style="margin-top: 15px;">
+        <h4>Development Info</h4>
+        <p><strong>ID:</strong> <span id="dev-id"></span></p>
+        <p><strong>Title:</strong> <span id="dev-title"></span></p>
+        <p><strong>Description:</strong> <span id="dev-description"></span></p>
+        <p><strong>Responsible:</strong> <span id="dev-responsible"></span></p>
+        <p><strong>Status:</strong> <span id="dev-status"></span></p>
+    </div>
+
+    <button id="save-edit">Save</button>
+    <button id="close-modal">Close</button>
+</div>
+
+<script>
+    async function hideAddEditButton() {
+        try {
+            const res = await fetch('/api/me');
+            const user = await res.json();
+            const roles = user.roles;
+
+            const restrictedRoles = ["ROLE_DEVELOPER", "ROLE_SUPPORT", "ROLE_ANALYST", "ROLE_CUSTOMER"];
+
+            const addBtn = document.getElementById("toggle-form");
+            const editBtn = document.getElementById("save-edit");
+
+            if (roles.some(role => restrictedRoles.includes(role))) {
+                addBtn.style.display = "none";
+                editBtn.style.display = "none";
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+    hideAddEditButton();
+
+    async function setupNavbar() {
+        try {
+            const res = await fetch('/api/me');
+            const data = await res.json();
+            const roles = data.roles;
+
+            const myTasks = document.getElementById("my-tasks-link");
+
+            if (roles.includes("ROLE_DEVELOPER") || roles.includes("ROLE_QA")) {
+                myTasks.style.display = "inline-block";
+            }
+        } catch (e) {
+            console.error("Auth check failed", e);
+        }
+    }
+
+    setupNavbar();
+
+    const form = document.getElementById('testing-form');
+    const toggleFormBtn = document.getElementById('toggle-form');
+    const list = document.getElementById('testing-list');
+    const modal = document.getElementById('edit-modal');
+    const saveBtn = document.getElementById('save-edit');
+    const closeBtn = document.getElementById('close-modal');
+
+    let editingId = null;
+
+    toggleFormBtn.onclick = () => {
+        form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    };
+
+    async function fetchTestings() {
+        const res = await fetch('/api/testings');
+        const data = await res.json();
+        list.innerHTML = '';
+        data.forEach(t => {
+            const item = document.createElement('li');
+            item.textContent = `${t.title} [${t.status}] — Priority ${t.priority}`;
+
+            const del = document.createElement('button');
+            del.textContent = 'Delete';
+            del.onclick = async () => {
+                await fetch(`/api/testings/${t.id}`, { method: 'DELETE' });
+                fetchTestings();
+            };
+
+            const open = document.createElement('button');
+            open.textContent = 'Open';
+            open.onclick = () => openModal(t);
+
+            item.appendChild(open);
+            item.appendChild(del);
+            list.appendChild(item);
+        });
+    }
+
+    form.onsubmit = async (e) => {
+        e.preventDefault();
+        const data = {
+            title: form.title.value,
+            description: form.description.value,
+            responsible: form.responsible.value,
+            priority: form.priority.value,
+            deadline: form.deadline.value,
+            status: form.status.value,
+            developmentId: form.developmentId.value
+        };
+        await fetch('/api/testings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        form.reset();
+        fetchTestings();
+    };
+
+    function openModal(t) {
+        editingId = t.id;
+        modal.style.display = 'block';
+
+        document.getElementById('testing-id').textContent = t.id;
+        document.getElementById('edit-title').value = t.title;
+        document.getElementById('edit-description').value = t.description;
+        document.getElementById('edit-responsible').value = t.responsible;
+        document.getElementById('edit-priority').value = t.priority;
+        document.getElementById('edit-deadline').value = t.deadline?.slice(0, 16);
+        document.getElementById('edit-status').value = t.status;
+
+        if (t.development) {
+            document.getElementById('dev-id').textContent = t.development.id;
+            document.getElementById('dev-title').textContent = t.development.title;
+            document.getElementById('dev-description').textContent = t.development.description;
+            document.getElementById('dev-responsible').textContent = t.development.responsible;
+            document.getElementById('dev-status').textContent = t.development.status;
+        }
+    }
+
+    closeBtn.onclick = () => {
+        modal.style.display = 'none';
+        editingId = null;
+    };
+
+    saveBtn.onclick = async () => {
+        const data = {
+            title: document.getElementById('edit-title').value,
+            description: document.getElementById('edit-description').value,
+            responsible: document.getElementById('edit-responsible').value,
+            priority: document.getElementById('edit-priority').value,
+            deadline: document.getElementById('edit-deadline').value,
+            status: document.getElementById('edit-status').value
+        };
+        await fetch(`/api/testings/${editingId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        modal.style.display = 'none';
+        editingId = null;
+        fetchTestings();
+    };
+
+    fetchTestings();
+</script>
+
+</body>
+</html>

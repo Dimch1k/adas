@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Customers</title>
+    <style>
+        #customer-form, #edit-modal {
+            display: none;
+            margin-top: 10px;
+        }
+        .modal {
+            position: fixed;
+            top: 30%;
+            left: 50%;
+            transform: translate(-50%, -30%);
+            background: white;
+            padding: 20px;
+            border: 1px solid #ccc;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+<!-- Navigation -->
+<nav style="background: #f4f4f4; padding: 10px; margin-bottom: 20px;">
+    <a href="/customers.html" style="margin-right: 15px;">Customers</a>
+    <a href="/support.html" style="margin-right: 15px;">Support</a>
+    <a href="/requirements.html" style="margin-right: 15px;">Requirements</a>
+    <a href="/developments.html" style="margin-right: 15px;">Developments</a>
+    <a href="/testings.html" style="margin-right: 15px;">Testings</a>
+    <a href="/my-tasks.html" id="my-tasks-link" style="display: none;">My Tasks</a>
+</nav>
+<h1>Customers</h1>
+
+<button id="toggle-form">Add New</button>
+
+<form id="customer-form">
+    <input type="text" id="name" placeholder="Name" required />
+    <input type="text" id="surname" placeholder="Surname" required />
+    <input type="text" id="phone" placeholder="Phone number" />
+    <input type="email" id="email" placeholder="Email" />
+    <button type="submit">Create</button>
+</form>
+
+<ul id="customer-list"></ul>
+
+<div id="edit-modal" class="modal">
+    <h3>Edit Customer</h3>
+    Name
+    <input type="text" id="edit-name" placeholder="Name" required />
+    Surname
+    <input type="text" id="edit-surname" placeholder="Surname" required />
+    <br>
+    Phone number
+    <input type="text" id="edit-phone" placeholder="Phone number" />
+    Email
+    <input type="email" id="edit-email" placeholder="Email" />
+    <button id="save-edit">Save</button>
+    <button id="close-modal">Close</button>
+</div>
+
+<script>
+    const form = document.getElementById('customer-form');
+    const toggleFormBtn = document.getElementById('toggle-form');
+    const list = document.getElementById('customer-list');
+
+    const modal = document.getElementById('edit-modal');
+    const saveBtn = document.getElementById('save-edit');
+    const closeBtn = document.getElementById('close-modal');
+
+    async function setupNavbar() {
+        try {
+            const res = await fetch('/api/me');
+            const data = await res.json();
+            const roles = data.roles;
+
+            const myTasks = document.getElementById("my-tasks-link");
+
+            if (roles.includes("ROLE_DEVELOPER") || roles.includes("ROLE_QA")) {
+                myTasks.style.display = "inline-block";
+            }
+        } catch (e) {
+            console.error("Auth check failed", e);
+        }
+    }
+
+    setupNavbar();
+
+    let editingId = null;
+
+    toggleFormBtn.onclick = () => {
+        form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    };
+
+    async function fetchCustomers() {
+        const res = await fetch('/api/customers');
+        const customers = await res.json();
+        list.innerHTML = '';
+        customers.forEach(c => {
+            const item = document.createElement('li');
+            item.textContent = `Name: ${c.name}, Surname: ${c.surname}`;
+
+            const del = document.createElement('button');
+            del.textContent = 'Delete';
+            del.onclick = async () => {
+                await fetch(`/api/customers/${c.id}`, { method: 'DELETE' });
+                fetchCustomers();
+            };
+
+            const open = document.createElement('button');
+            open.textContent = 'Open';
+            open.onclick = () => openModal(c);
+
+            item.appendChild(open);
+            item.appendChild(del);
+            list.appendChild(item);
+        });
+    }
+
+    form.onsubmit = async (e) => {
+        e.preventDefault();
+        const customer = {
+            name: form.name.value,
+            surname: form.surname.value,
+            phone: form.phone.value,
+            email: form.email.value,
+        };
+        await fetch('/api/customers', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(customer)
+        });
+        form.reset();
+        fetchCustomers();
+    };
+
+    function openModal(customer) {
+        editingId = customer.id;
+        modal.style.display = 'block';
+        document.getElementById('edit-name').value = customer.name;
+        document.getElementById('edit-surname').value = customer.surname;
+        document.getElementById('edit-phone').value = customer.phone;
+        document.getElementById('edit-email').value = customer.email;
+    }
+
+    closeBtn.onclick = () => {
+        modal.style.display = 'none';
+        editingId = null;
+    };
+
+    saveBtn.onclick = async () => {
+        const updated = {
+            name: document.getElementById('edit-name').value,
+            surname: document.getElementById('edit-surname').value,
+            phone: document.getElementById('edit-phone').value,
+            email: document.getElementById('edit-email').value,
+        };
+        await fetch(`/api/customers/${editingId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updated)
+        });
+        modal.style.display = 'none';
+        editingId = null;
+        fetchCustomers();
+    };
+
+    fetchCustomers();
+</script>
+</body>
+</html>

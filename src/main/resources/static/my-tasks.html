@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>My Tasks</title>
+</head>
+<body>
+<nav style="background: #f4f4f4; padding: 10px; margin-bottom: 20px;">
+    <a href="/customers.html" style="margin-right: 15px;">Customers</a>
+    <a href="/support.html" style="margin-right: 15px;">Support</a>
+    <a href="/requirements.html" style="margin-right: 15px;">Requirements</a>
+    <a href="/developments.html" style="margin-right: 15px;">Developments</a>
+    <a href="/testings.html" style="margin-right: 15px;">Testings</a>
+    <a href="/my-tasks.html" id="my-tasks-link" style="display: none;">My Tasks</a>
+</nav>
+
+<h1>My Tasks</h1>
+<ul id="task-list"></ul>
+
+<script>
+    async function loadMyTasks() {
+        const me = await fetch('/api/me').then(res => res.json());
+        const username = me.username;
+        const roles = me.roles;
+        const list = document.getElementById('task-list');
+
+        if (roles.includes("ROLE_DEVELOPER")) {
+            const res = await fetch('/api/developments');
+            const data = await res.json();
+            const my = data.filter(d => d.responsible === username);
+            render(my, "Development");
+        }
+
+        if (roles.includes("ROLE_QA")) {
+            const res = await fetch('/api/testings');
+            const data = await res.json();
+            const my = data.filter(t => t.responsible === username);
+            render(my, "Testing");
+        }
+
+        function render(tasks, type) {
+            tasks.forEach(task => {
+                const item = document.createElement("li");
+                item.innerHTML = `<strong>[${type}]</strong> ${task.title} – ${task.status || ""}`;
+                list.appendChild(item);
+            });
+        }
+    }
+
+    loadMyTasks();
+
+    async function setupNavbar() {
+        try {
+            const res = await fetch('/api/me');
+            const data = await res.json();
+            const roles = data.roles;
+
+            const myTasks = document.getElementById("my-tasks-link");
+
+            if (roles.includes("ROLE_DEVELOPER") || roles.includes("ROLE_QA")) {
+                myTasks.style.display = "inline-block";
+            }
+        } catch (e) {
+            console.error("Auth check failed", e);
+        }
+    }
+
+    setupNavbar();
+</script>
+</body>
+</html>

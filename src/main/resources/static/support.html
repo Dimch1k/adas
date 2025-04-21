@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Support</title>
+    <style>
+        #support-form, #edit-modal {
+            display: none;
+            margin-top: 10px;
+        }
+        .modal {
+            position: fixed;
+            top: 30%;
+            left: 50%;
+            transform: translate(-50%, -30%);
+            background: white;
+            padding: 20px;
+            border: 1px solid #ccc;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+<!-- Navigation -->
+<nav style="background: #f4f4f4; padding: 10px; margin-bottom: 20px;">
+    <a href="/customers.html" style="margin-right: 15px;">Customers</a>
+    <a href="/support.html" style="margin-right: 15px;">Support</a>
+    <a href="/requirements.html" style="margin-right: 15px;">Requirements</a>
+    <a href="/developments.html" style="margin-right: 15px;">Developments</a>
+    <a href="/testings.html" style="margin-right: 15px;">Testings</a>
+    <a href="/my-tasks.html" id="my-tasks-link" style="display: none;">My Tasks</a>
+</nav>
+
+<h1>Support</h1>
+
+<button id="toggle-form">Add New</button>
+
+<form id="support-form">
+    <input type="text" id="title" placeholder="Title" required />
+    <input type="text" id="description" placeholder="Description" />
+    <input type="text" id="status" placeholder="Status" />
+    <input type="email" id="email" placeholder="Customer Email" required />
+    <button type="submit">Create</button>
+</form>
+
+<ul id="support-list"></ul>
+<!--Edit-->
+<div id="edit-modal" class="modal">
+    <h3>Edit Support</h3>
+
+    <p><strong>Support ID:</strong> <span id="support-id"></span></p>
+    Title
+    <input type="text" id="edit-title" placeholder="Title" />
+    <br>
+    Description
+    <input type="text" id="edit-description" placeholder="Description" />
+    <br>
+    Status
+    <input type="text" id="edit-status" placeholder="Status" />
+
+    <div id="customer-info">
+        <h4>Customer Info:</h4>
+        <p><strong>Name:</strong> <span id="customer-name"></span></p>
+        <p><strong>Surname:</strong> <span id="customer-surname"></span></p>
+        <p><strong>Phone:</strong> <span id="customer-phone"></span></p>
+        <p><strong>Email:</strong> <span id="customer-email"></span></p>
+    </div>
+
+    <button id="save-edit">Save</button>
+    <button id="close-modal">Close</button>
+</div>
+
+<script>
+
+    async function hideAddEditButton() {
+        try {
+            const res = await fetch('/api/me');
+            const user = await res.json();
+            const roles = user.roles;
+
+            const restrictedRoles = ["ROLE_QA", "ROLE_DEVELOPER", "ROLE_ANALYST", "ROLE_PROJECT_MANAGER"];
+
+            const addBtn = document.getElementById("toggle-form");
+            const editBtn = document.getElementById("save-edit");
+
+            if (roles.some(role => restrictedRoles.includes(role))) {
+                addBtn.style.display = "none";
+                editBtn.style.display = "none";
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+    hideAddEditButton();
+
+    async function setupNavbar() {
+        try {
+            const res = await fetch('/api/me');
+            const data = await res.json();
+            const roles = data.roles;
+
+            const myTasks = document.getElementById("my-tasks-link");
+
+            if (roles.includes("ROLE_DEVELOPER") || roles.includes("ROLE_QA")) {
+                myTasks.style.display = "inline-block";
+            }
+        } catch (e) {
+            console.error("Auth check failed", e);
+        }
+    }
+
+    setupNavbar();
+
+    let userRoles = [];
+
+    async function getUserInfo() {
+        const res = await fetch('/api/me');
+        const data = await res.json();
+        userRoles = data.roles;
+
+        if (userRoles.includes("ROLE_CUSTOMER") || userRoles.includes("ROLE_DEVELOPER") || userRoles.includes("ROLE_QA")) {
+            document.getElementById("customer-info").style.display = "none";
+        }
+    }
+
+    getUserInfo();
+
+    const form = document.getElementById('support-form');
+    const toggleFormBtn = document.getElementById('toggle-form');
+    const list = document.getElementById('support-list');
+    const modal = document.getElementById('edit-modal');
+    const saveBtn = document.getElementById('save-edit');
+    const closeBtn = document.getElementById('close-modal');
+
+    let editingId = null;
+
+    toggleFormBtn.onclick = () => {
+        form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    };
+
+    async function fetchSupport() {
+        const res = await fetch('/api/support');
+        const data = await res.json();
+        list.innerHTML = '';
+        data.forEach(s => {
+            const item = document.createElement('li');
+            item.textContent = `Title - ${s.title}, status - ${s.status}`;
+            const del = document.createElement('button');
+            del.textContent = 'Delete';
+            del.onclick = async () => {
+                await fetch(`/api/support/${s.id}`, { method: 'DELETE' });
+                fetchSupport();
+            };
+
+            const open = document.createElement('button');
+            open.textContent = 'Open';
+            open.onclick = () => openModal(s);
+
+            item.appendChild(open);
+            item.appendChild(del);
+            list.appendChild(item);
+        });
+    }
+
+    form.onsubmit = async (e) => {
+        e.preventDefault();
+        const data = {
+            title: form.title.value,
+            description: form.description.value,
+            status: form.status.value,
+            email: form.email.value
+        };
+        await fetch('/api/support', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        form.reset();
+        fetchSupport();
+    };
+
+    function openModal(support) {
+        editingId = support.id;
+        modal.style.display = 'block';
+        document.getElementById('edit-title').value = support.title;
+        document.getElementById('edit-description').value = support.description;
+        document.getElementById('edit-status').value = support.status;
+
+        document.getElementById('support-id').textContent = support.id;
+
+        const customer = support.customer;
+        if (customer) {
+            document.getElementById('customer-name').textContent = customer.name;
+            document.getElementById('customer-surname').textContent = customer.surname;
+            document.getElementById('customer-email').textContent = customer.email;
+            document.getElementById('customer-phone').textContent = customer.phone;
+            document.getElementById('customer-address').textContent = customer.address;
+        }
+    }
+
+    closeBtn.onclick = () => {
+        modal.style.display = 'none';
+        editingId = null;
+    };
+
+    saveBtn.onclick = async () => {
+        const data = {
+            title: document.getElementById('edit-title').value,
+            description: document.getElementById('edit-description').value,
+            status: document.getElementById('edit-status').value,
+        };
+        await fetch(`/api/support/${editingId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        modal.style.display = 'none';
+        editingId = null;
+        fetchSupport();
+    };
+
+    fetchSupport();
+</script>
+</body>
+</html>
